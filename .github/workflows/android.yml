@@ -1,0 +1,36 @@
+
+name: Build YADA APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Extract project
+        run: unzip -q YADA_Android_Project_v1_mobile_build.zip
+
+      - name: Build APK
+        run: cd yada_android && gradle assembleDebug
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: YADA-APK
+          path: yada_android/app/build/outputs/apk/debug/app-debug.apk
