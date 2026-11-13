@@ -29,6 +29,18 @@ jobs:
       - name: Extract project
         run: unzip -q YADA_Android_Project_v1_mobile_build.zip
 
+      - name: Fix Java Kotlin compatibility
+        run: |
+          cat >> yada_android/app/build.gradle.kts <<'EOF'
+
+          android {
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+          }
+          EOF
+
       - name: Build APK
         run: cd yada_android && gradle assembleDebug
 
