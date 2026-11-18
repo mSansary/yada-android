@@ -4,47 +4,81 @@ name: Build YADA APK
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    branches:
+      - main
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+    timeout-minutes: 30
 
-      - name: Set up Java
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
 
-      - uses: gradle/actions/setup-gradle@v4
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
 
-      - uses: android-actions/setup-android@v3
-        with:
-           packages: 'platform-tools'
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
 
-      - name: Extract project
-        run: unzip -oq YADA_Android_Project_v1_mobile_build.zip -x '.github/*' '*/.github/*'
-
-      - name: Fix Java Kotlin compatibility
+      - name: Install Android SDK packages
         run: |
-          cat >> yada_android/app/build.gradle.kts <<'EOF'
+          sdkmanager "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
+          yes | sdkmanager --licenses || true
 
-          android {
-              compileOptions {
-                  sourceCompatibility = JavaVersion.VERSION_17
-                  targetCompatibility = JavaVersion.VERSION_17
-              }
-          }
-          EOF
+      - name: Extract YADA 2.7
+        run: |
+          ARCHIVE="YADA_Android_Project_v2.7_UI_Fixes.zip"
+          if [ ! -f "$ARCHIVE" ]; then
+            echo "::error::Project archive not found: $ARCHIVE"
+            exit 1
+          fi
 
-      - name: Build APK
-        run: cd yada_android && gradle assembleDebug
+          mkdir -p "$RUNNER_TEMP/yada-project"
+          unzip -oq "$ARCHIVE" -d "$RUNNER_TEMP/yada-project"
 
-      - uses: actions/upload-artifact@v4
+      - name: Detect Gradle project directory
+        id: project
+        run: |
+          SETTINGS=$(find "$RUNNER_TEMP/yada-project" \
+            -type f -name "settings.gradle.kts" \
+            -o -type f -name "settings.gradle" | head -n 1)
+
+          if [ -z "$SETTINGS" ]; then
+            echo "::error::Gradle settings file not found"
+            exit 1
+          fi
+
+          PROJECT_DIR="$(dirname "$SETTINGS")"
+          echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
+          echo "Project directory: $PROJECT_DIR"
+          ls -la "$PROJECT_DIR"
+
+      - name: Build YADA APK
+        run: |
+          gradle -p "${{ steps.project.outputs.dir }}" \
+            --no-daemon clean assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
         with:
-          name: YADA-APK
-          path: yada_android/app/build/outputs/apk/debug/app-debug.apk
+          name: YADA-2.7-APK
+          path: ${{ steps.project.outputs.dir }}/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+  
