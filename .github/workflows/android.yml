@@ -27,7 +27,7 @@ jobs:
            packages: 'platform-tools'
 
       - name: Extract project
-        run: unzip -q YADA_Android_Project_v1_mobile_build.zip
+        run: unzip -oq YADA_Android_Project_v1_mobile_build.zip -x '.github/*' '*/.github/*'
 
       - name: Fix Java Kotlin compatibility
         run: |
