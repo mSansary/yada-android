@@ -1,4 +1,3 @@
-
 name: Build YADA APK
 
 on:
@@ -6,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - master
 
 permissions:
   contents: read
@@ -32,34 +32,39 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-        with:
-          packages: platform-tools
 
       - name: Install Android SDK packages
         run: |
-         sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
-         yes | sdkmanager --licenses || true
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          yes | sdkmanager --licenses || true
 
-      - name: Extract YADA 2.7
+      - name: Find and extract YADA project archive
+        id: archive
+        shell: bash
         run: |
-          ARCHIVE="YADA_Android_Project_v2.7_UI_Fixes.zip"
-          if [ ! -f "$ARCHIVE" ]; then
-            echo "::error::Project archive not found: $ARCHIVE"
+          shopt -s nullglob
+          archives=(YADA_Android_Project_v*.zip)
+          if [ ${#archives[@]} -eq 0 ]; then
+            echo "::error::No YADA project ZIP found in the repository root."
+            echo "Upload a file named YADA_Android_Project_vX.zip to the repository root."
             exit 1
           fi
+
+          ARCHIVE=$(printf '%s\n' "${archives[@]}" | sort -V | tail -n 1)
+          echo "Using project archive: $ARCHIVE"
+          echo "name=$ARCHIVE" >> "$GITHUB_OUTPUT"
 
           mkdir -p "$RUNNER_TEMP/yada-project"
           unzip -oq "$ARCHIVE" -d "$RUNNER_TEMP/yada-project"
 
       - name: Detect Gradle project directory
         id: project
+        shell: bash
         run: |
-          SETTINGS=$(find "$RUNNER_TEMP/yada-project" \
-            -type f -name "settings.gradle.kts" \
-            -o -type f -name "settings.gradle" | head -n 1)
+          SETTINGS=$(find "$RUNNER_TEMP/yada-project" -type f \( -name "settings.gradle.kts" -o -name "settings.gradle" \) -print -quit)
 
           if [ -z "$SETTINGS" ]; then
-            echo "::error::Gradle settings file not found"
+            echo "::error::Gradle settings file not found inside the selected ZIP."
             exit 1
           fi
 
@@ -68,16 +73,14 @@ jobs:
           echo "Project directory: $PROJECT_DIR"
           ls -la "$PROJECT_DIR"
 
-      - name: Build YADA APK
+      - name: Build YADA debug APK
         run: |
-          gradle -p "${{ steps.project.outputs.dir }}" \
-            --no-daemon clean assembleDebug
+          gradle -p "${{ steps.project.outputs.dir }}" --no-daemon clean assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: YADA-2.7-APK
+          name: YADA-debug-APK
           path: ${{ steps.project.outputs.dir }}/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
-  
