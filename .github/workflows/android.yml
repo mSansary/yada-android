@@ -85,5 +85,3 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: OpenAI ChatGPT Action
-        uses: cahaseler/openai-api@v1.0.0
